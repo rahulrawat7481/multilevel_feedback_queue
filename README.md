@@ -21,3 +21,5 @@ Consider:
 1. Queue 2 will be processed after Queue 1 becomes empty.
 
 2. Priority of Queue 2 has lower priority than in Queue 1.
+
+
