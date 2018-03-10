@@ -19,6 +19,29 @@ process_struct *inpProcesses;
 
 // round robin queue
 
+// sort based on arrivalT -> priority -> pid
+int processSort(const void* a, const void* b) {
+	process_struct *p1 = (process_struct *)a;
+	process_struct *p2 = (process_struct *)b;
+
+	if(p1->arrivalT > p2->arrivalT)
+		return true;
+	else if(p1->arrivalT < p2->arrivalT)
+		return false;
+
+	// if arrival time is equal
+	if(p1->priority > p2->priority)
+		return true;
+	else if(p1->priority < p2->priority)
+		return false;
+
+	// if both have same priority
+	if(p1->pid > p2->pid)
+		return true;
+	else
+		return false;
+}
+
 void test() {
 	printf("\n\n");
 	for(int i=0; i<nProcess; i++) {
@@ -46,5 +69,9 @@ int main(int argc, char** argv) {
 		printf("\nProcess %d Priority : ", i);
 		scanf("%d", &inpProcesses[i].priority);
 	}
+
+	// sorting
+	qsort(inpProcesses, nProcess, sizeof(process_struct), processSort);
+
 	test();
 }
