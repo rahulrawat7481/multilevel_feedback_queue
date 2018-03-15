@@ -12,7 +12,8 @@ typedef struct process_data {
 	int waitingT;
 } process_struct;
 
-int nProcess;
+int nProcess = 0;
+int totalExecTime = 0;
 process_struct *inpProcesses;
 
 // fixed priority queue
@@ -42,6 +43,17 @@ int processSort(const void* a, const void* b) {
 		return false;
 }
 
+// get total execution time
+void calcTotalExecTime() {
+	totalExecTime = inpProcesses[0].arrivalT;
+	for(int i=0; i<nProcess; i++) {
+		if(totalExecTime >= inpProcesses[i].arrivalT)
+			totalExecTime += inpProcesses[i].burstT;
+		else
+			totalExecTime += (inpProcesses[i].arrivalT - totalExecTime) + inpProcesses[i].burstT;
+	}
+}
+
 void test() {
 	printf("\n\n");
 	for(int i=0; i<nProcess; i++) {
@@ -51,6 +63,8 @@ void test() {
 		printf("\nProcess %d Burst Time : %d", i, inpProcesses[i].burstT);
 		printf("\nProcess %d Priority : %d", i, inpProcesses[i].priority);
 	}
+
+	printf("\n\nTotal Exec Time : %d", totalExecTime);
 }
 
 int main(int argc, char** argv) {
@@ -72,6 +86,6 @@ int main(int argc, char** argv) {
 
 	// sorting
 	qsort(inpProcesses, nProcess, sizeof(process_struct), processSort);
-
+	calcTotalExecTime();
 	test();
 }
