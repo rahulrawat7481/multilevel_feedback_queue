@@ -20,6 +20,7 @@ typedef struct process_data {
 
 int nProcess = 0;
 int totalExecTime = 0;
+int *gantChart;
 int CPU_STATE = IDLE;
 process_struct *inpProcesses;
 enum process_from {NONE, PQ, RRQ} PROCESS_QUEUE;
@@ -55,29 +56,8 @@ int processSortPID(const void*, const void*);
 // get total execution time
 void calcTotalExecTime();
 
-void printProcess(process_struct* p) {
-		printf("\n");
-		printf("\nProcess PID : %d", p->pid);
-		printf("\nProcess Arrival Time : %d", p->arrivalT);
-		printf("\nProcess Burst Time : %d", p->burstT);
-		printf("\nProcess Remaining Time : %d", p->remainingT);
-		printf("\nProcess Priority : %d", p->priority);
-}
-
-
-void test() {
-	printf("\n\n");
-	for(int i=0; i<nProcess; i++) {
-		printf("\n");
-		printf("\nProcess %d PID : %d", i, inpProcesses[i].pid);
-		printf("\nProcess %d Arrival Time : %d", i, inpProcesses[i].arrivalT);
-		printf("\nProcess %d Burst Time : %d", i, inpProcesses[i].burstT);
-		printf("\nProcess %d Priority : %d", i, inpProcesses[i].priority);
-	}
-
-	printf("\n\nTotal Exec Time : %d", totalExecTime);
-}
-
+// calculate metrics like start time, finish time etc.
+void metricsCalculation();
 
 int main(int argc, char** argv) {
 	printf("\nEnter number of processes : ");
@@ -102,45 +82,29 @@ int main(int argc, char** argv) {
 	// total execution time calculation
 	calcTotalExecTime();
 
-
-	test();
-
-
-	process_struct* current;
+	// scheduling
+	process_struct* current = NULL;
 	int cpuTime = 0;
 	int tempTimeQuantum = timeQuantum;
 	NODE* fixedPriorityQueue = NULL;
 	NODE* roundRobinQueue = NULL;
 	PROCESS_QUEUE = NONE;
 
-	int gantChart[totalExecTime];
+	gantChart = (int *)malloc(totalExecTime * sizeof(int));
 	for(int i=0; i<totalExecTime; i++) gantChart[i] = -1;
 
 	for(; cpuTime < totalExecTime; cpuTime++) {
-		printf("\n-------------------------\n");
-		if(current == NULL)
-			printf("\n CPU TIME -> %3d --> No Process Running", cpuTime);
-		else {
-			printf("\n CPU TIME -> %3d --> Process Running with PID = %d", cpuTime, current->pid);
-			printProcess(current);
-			printf("\n\n");
-		}
-
-
 		// add processes with arrivalT == cpuTime to fixed priority queue
 		for(int i=0; i<nProcess; i++) {
 			if(inpProcesses[i].arrivalT == cpuTime) {
-				printf("\nPushing Process %d", inpProcesses[i].pid);
 				pq_push(&fixedPriorityQueue, &inpProcesses[i]);
 			}
 		}
 
 		if(CPU_STATE == IDLE) { // if cpu is idle
-			printf("\n CPU TIME -> %3d --> CPU is IDLE", cpuTime);
 			// if there is a new process in priority queue
 			if(!pq_isEmpty(&fixedPriorityQueue)) {
 				current = pq_pop(&fixedPriorityQueue);
-				printf("\n CPU TIME -> %3d --> fixed priority queue not empty, process popped %d", cpuTime, current->pid);
 				CPU_STATE = BUSY;
 				PROCESS_QUEUE = PQ;
 				tempTimeQuantum = timeQuantum;
@@ -148,19 +112,15 @@ int main(int argc, char** argv) {
 			// else if there is a process remaining in round robin queue
 			else if(!q_isEmpty(&roundRobinQueue)) {
 				current = q_pop(&roundRobinQueue);
-				printf("\n CPU TIME -> %3d --> round robin queue not empty, process popped %d", cpuTime, current->pid);
 				CPU_STATE = BUSY;
 				PROCESS_QUEUE = RRQ;
 				tempTimeQuantum = timeQuantum;
 			}
 		} else { // if cpu is busy
-			printf("\n CPU TIME -> %3d --> CPU is BUSY", cpuTime);
 			// check if process is from priority queue 
 			// and new process comes in priority queue with high priority
 			if(PROCESS_QUEUE == PQ && (!pq_isEmpty(&fixedPriorityQueue))) {
-				printf("\n CPU TIME -> %3d --> fixed priority queue running & new process in fixed priority queue with pid %d", cpuTime, pq_top(&fixedPriorityQueue)->pid);
 				if(pq_top(&fixedPriorityQueue)->priority < current->priority) {
-					printf("\n CPU TIME -> %3d --> process %d has higher priority", cpuTime, pq_top(&fixedPriorityQueue)->pid);
 					q_push(&roundRobinQueue, current);
 					current = pq_pop(&fixedPriorityQueue);
 					tempTimeQuantum = timeQuantum;
@@ -169,7 +129,6 @@ int main(int argc, char** argv) {
 			// check if process if from round robin queue
 			// and new process comes in priority queue
 			else if(PROCESS_QUEUE == RRQ && (!pq_isEmpty(&fixedPriorityQueue))) {
-				printf("\n CPU TIME -> %3d --> round robin queue running & new process in fixed priority queue with pid %d", cpuTime, pq_top(&fixedPriorityQueue)->pid);
 				q_push(&roundRobinQueue, current);
 				current = pq_pop(&fixedPriorityQueue);
 				PROCESS_QUEUE = PQ;
@@ -183,12 +142,10 @@ int main(int argc, char** argv) {
 			gantChart[cpuTime] = current->pid;		
 			if(PROCESS_QUEUE == RRQ) {
 				tempTimeQuantum--;
-				printf("\n CPU TIME -> %3d --> process with pid %d time quatum %d", cpuTime, current->pid, tempTimeQuantum);
 			}
 
 			// if process finished
 			if(current->remainingT == 0) {
-				printf("\n CPU TIME -> %3d --> process with pid %d finished", cpuTime, current->pid);
 				CPU_STATE = IDLE;
 				current = NULL;
 				PROCESS_QUEUE = NONE;
@@ -196,7 +153,6 @@ int main(int argc, char** argv) {
 			}
 			// time quantum ends
 			else if(tempTimeQuantum == 0) {
-				printf("\n CPU TIME -> %3d --> process with pid %d - time quantum finished", cpuTime, current->pid);
 				q_push(&roundRobinQueue, current);
 				current = NULL;
 				PROCESS_QUEUE = NONE;
@@ -209,6 +165,24 @@ int main(int argc, char** argv) {
 	// go to previous state	
 	qsort(inpProcesses, nProcess, sizeof(process_struct), processSortPID);
 
+	// calculate metrics
+	metricsCalculation();
+
+	// print the result
+	printf("\n\n Total Execution Time : %d", totalExecTime);
+	printf("\n\n  PID     Arrival     Burst     Priority     Start     Finish     Response     Waiting");
+	for(int i=0; i<nProcess; i++)
+		printf("\n  %3d     %7d     %5d     %8d     %5d     %6d     %8d     %7d",
+			inpProcesses[i].pid, inpProcesses[i].arrivalT, inpProcesses[i].burstT, inpProcesses[i].priority, inpProcesses[i].startT, inpProcesses[i].finishT, inpProcesses[i].responseT, inpProcesses[i].waitingT);
+	printf("\n\n");
+
+
+	// free memory
+	free(inpProcesses);
+	free(gantChart);
+}
+
+void metricsCalculation() {
 	// start time calculation
 	for(int i=0; i<nProcess; i++) {
 		for(int j=0; j < totalExecTime; j++)
@@ -234,19 +208,6 @@ int main(int argc, char** argv) {
 		// waiting time calulation
 		inpProcesses[i].waitingT = (inpProcesses[i].finishT - inpProcesses[i].startT) - inpProcesses[i].burstT;
 	}
-
-	for(int i=0; i<totalExecTime; i++) {
-		printf("\n%d -> %d",i, gantChart[i]);
-	}
-	printf("\n\n");
-
-	// print the result
-	printf("\n\n Total Execution Time : %d", totalExecTime);
-	printf("\n\n  PID     Arrival     Burst     Priority     Start     Finish     Response     Waiting");
-	for(int i=0; i<nProcess; i++)
-		printf("\n  %3d     %7d     %5d     %8d     %5d     %6d     %8d     %7d",
-			inpProcesses[i].pid, inpProcesses[i].arrivalT, inpProcesses[i].burstT, inpProcesses[i].priority, inpProcesses[i].startT, inpProcesses[i].finishT, inpProcesses[i].responseT, inpProcesses[i].waitingT);
-	printf("\n");
 }
 
 int processSort(const void* a, const void* b) {
